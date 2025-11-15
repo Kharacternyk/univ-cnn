@@ -23,7 +23,7 @@ class ResidualBlock(nn.Module):
         self.relu = nn.ReLU(inplace=True)
 
         self.conv2 = nn.Conv2d(
-            out_channels, out_channels, kernel_size=1, stride=1, padding=1, bias=False
+            out_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=False
         )
         self.bn2 = nn.BatchNorm2d(out_channels)
 
@@ -68,7 +68,7 @@ class ResNet(nn.Module):
         self.layer2 = ResidualBlock(64, 128, stride=2)
 
         # Classifier
-        self.fc = nn.Linear(128 * 8 * 8, num_classes)  # Adjust for 32x32 image size
+        self.fc = nn.Linear(128 * 16 * 16, num_classes)  # Adjust for 32x32 image size
 
     def forward(self, x):
         x = self.conv1(x)
@@ -85,12 +85,11 @@ class ResNet(nn.Module):
 
 
 # Training function
-def train(model, trainloader, optimizer, criterion, device, accuracy):
+def train(model, trainloader, optimizer, criterion, device, accuracy, overfit):
     model.train()
     running_loss = 0.0
 
-    log_period = 100
-    # log_period = 1 # Overfit on one batch
+    log_period = 100 if not overfit else 1
 
     for i, (inputs, labels) in enumerate(trainloader):
         inputs, labels = inputs.to(device), labels.to(device)
@@ -115,7 +114,8 @@ def train(model, trainloader, optimizer, criterion, device, accuracy):
 
             accuracy.reset()
 
-        # break # Overfit on one batch
+        if overfit:
+            break
 
 
 def evaluate(model, testloader, device):
@@ -132,6 +132,7 @@ def evaluate(model, testloader, device):
 
     accuracy = correct / total
     print(f"Test accuracy: {accuracy * 100:.2f}%")
+    return accuracy
 
 
 if __name__ == "__main__":
@@ -146,7 +147,10 @@ if __name__ == "__main__":
     )
 
     transform_test = transforms.Compose(
-        [transforms.RandomHorizontalFlip(), transforms.ToTensor()]
+        [
+            transforms.ToTensor(),
+            transforms.Normalize((0.4915, 0.4822, 0.4466), (0.2463, 0.2428, 0.2607)),
+        ]
     )
 
     # Load CIFAR-10 dataset
@@ -172,12 +176,27 @@ if __name__ == "__main__":
 
     # Define loss function and optimizer
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=1e-6)
+    optimizer = optim.Adam(model.parameters(), lr=1e-2)
     accuracy = Accuracy()
 
     for epoch in range(10000):
-        train(model, trainloader, optimizer, criterion, device, accuracy)
-        evaluate(model, testloader, device)
+        train(model, trainloader, optimizer, criterion, device, accuracy, overfit=True)
+        accuracy_value = accuracy.compute().item()
+        if accuracy_value > 0.99:
+            break
+
+    trainloader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=128, shuffle=True
+    )
+    testloader = torch.utils.data.DataLoader(
+        test_dataset, batch_size=128, shuffle=False
+    )
+
+    for epoch in range(10000):
+        train(model, trainloader, optimizer, criterion, device, accuracy, overfit=False)
+        accuracy_value = evaluate(model, testloader, device)
+        if accuracy_value > 0.7895:
+            break
 
     # Task:
     # 1. Overfit on one batch
