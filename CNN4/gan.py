@@ -1,12 +1,13 @@
 import os
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from einops.layers.torch import Rearrange
 from torchvision import datasets, transforms
 from torchvision.utils import make_grid, save_image
 
-from einops.layers.torch import Rearrange
 
 class Generator(nn.Module):
     def __init__(self, g_input_dim, g_output_dim):
@@ -60,8 +61,8 @@ def G_train(G, D, batch_size, z_dim, criterion, G_optimizer):
 
     return G_loss.data.item()
 
-def D_train(x, G, D, z_dim, criterion, D_optimizer):
 
+def D_train(x, G, D, z_dim, criterion, D_optimizer):
     D.zero_grad()
     batch_size = x.shape[0]
     # train discriminator on real
@@ -87,24 +88,34 @@ def D_train(x, G, D, z_dim, criterion, D_optimizer):
     return D_loss.data.item()
 
 
-if __name__ == '__main__':
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+if __name__ == "__main__":
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     batch_size = 128
 
     # MNIST Dataset
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean=(0.5), std=(0.5)),
-        Rearrange('c h w -> c (h w)')
-    ])
+    transform = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.5), std=(0.5)),
+            Rearrange("c h w -> c (h w)"),
+        ]
+    )
 
-    train_dataset = datasets.MNIST(root='./mnist_data/', train=True, transform=transform, download=True)
-    test_dataset = datasets.MNIST(root='./mnist_data/', train=False, transform=transform, download=False)
+    train_dataset = datasets.MNIST(
+        root="./mnist_data/", train=True, transform=transform, download=True
+    )
+    test_dataset = datasets.MNIST(
+        root="./mnist_data/", train=False, transform=transform, download=False
+    )
 
     # Data Loader (Input Pipeline)
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
+    train_loader = torch.utils.data.DataLoader(
+        dataset=train_dataset, batch_size=batch_size, shuffle=True
+    )
+    test_loader = torch.utils.data.DataLoader(
+        dataset=test_dataset, batch_size=batch_size, shuffle=False
+    )
 
     z_dim = 64
     mnist_dim = train_dataset.train_data.size(1) * train_dataset.train_data.size(2)
@@ -129,12 +140,19 @@ if __name__ == '__main__':
             D_losses.append(D_train(x, G, D, z_dim, criterion, D_optimizer))
             G_losses.append(G_train(G, D, batch_size, z_dim, criterion, G_optimizer))
 
-        print('[%d/%d]: loss_d: %.3f, loss_g: %.3f' % (
-            (epoch), n_epoch, torch.mean(torch.FloatTensor(D_losses)), torch.mean(torch.FloatTensor(G_losses))))
+        print(
+            "[%d/%d]: loss_d: %.3f, loss_g: %.3f"
+            % (
+                (epoch),
+                n_epoch,
+                torch.mean(torch.FloatTensor(D_losses)),
+                torch.mean(torch.FloatTensor(G_losses)),
+            )
+        )
 
         # Save trained parameters of model
-        torch.save(G.state_dict(), 'G.pth')
-        torch.save(D.state_dict(), 'D.pth')
+        torch.save(G.state_dict(), "G.pth")
+        torch.save(D.state_dict(), "D.pth")
 
         if epoch % 10 == 0:
             # Visualize generated data
@@ -144,10 +162,9 @@ if __name__ == '__main__':
             generated_images = G(z)
 
             # Make the images as grid
-            generated_images = make_grid(generated_images.view(-1, 1, 28, 28), nrow=8, normalize=True)
-            os.makedirs('./results', exist_ok=True)
+            generated_images = make_grid(
+                generated_images.view(-1, 1, 28, 28), nrow=8, normalize=True
+            )
+            os.makedirs("./results", exist_ok=True)
             # Save the generated torch tensor models to disk
-            save_image(generated_images, f'./results/gen_img{epoch}.png')
-
-
-
+            save_image(generated_images, f"./results/gen_img{epoch}.png")
