@@ -138,7 +138,11 @@ if __name__ == "__main__":
             x = x.to(device)
 
             D_losses.append(D_train(x, G, D, z_dim, criterion, D_optimizer))
-            G_losses.append(G_train(G, D, batch_size, z_dim, criterion, G_optimizer))
+
+            if not batch_idx % 3:
+                G_losses.append(
+                    G_train(G, D, batch_size, z_dim, criterion, G_optimizer)
+                )
 
         print(
             "[%d/%d]: loss_d: %.3f, loss_g: %.3f"
@@ -151,10 +155,10 @@ if __name__ == "__main__":
         )
 
         # Save trained parameters of model
-        torch.save(G.state_dict(), "G.pth")
-        torch.save(D.state_dict(), "D.pth")
-
         if epoch % 10 == 0:
+            torch.save(G.state_dict(), "G.pth")
+            torch.save(D.state_dict(), "D.pth")
+
             # Visualize generated data
             z = torch.randn(64, z_dim).to(device)
 
