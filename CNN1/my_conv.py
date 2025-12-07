@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.autograd import Function, Variable
 
 
@@ -12,13 +13,17 @@ class MyConv2dFunction(Function):
         bias:    (C_out,) or None
         stride, padding, dilation: int
         """
+        if padding:
+            x = F.pad(x, [padding] * 4)
+
         ctx.save_for_backward(x, weight)
+        ctx.padding = padding
 
         N, C_in, H, W = x.shape
         C_out, C_in, kH, kW = weight.shape
 
-        H_out = H + 2 * padding - kH + 1
-        W_out = W + 2 * padding - kW + 1
+        H_out = H - kH + 1
+        W_out = W - kW + 1
 
         ctx.H_out = H_out
         ctx.W_out = W_out
@@ -71,6 +76,8 @@ class MyConv2dFunction(Function):
                         )
                         bias_grad[j] += grad_output[i, j, k, l]
 
+        x_grad = x_grad[:, :, ctx.padding : -ctx.padding, ctx.padding : -ctx.padding]
+
         return (
             Variable(x_grad),
             Variable(weight_grad),
@@ -113,11 +120,11 @@ C_out = 2
 
 x = torch.randn(B, C, H, W, device=device, requires_grad=True)
 
-myconv = MyConv2d(C, C_out, (3, 3), stride=1, padding=0, dilation=1, bias=True).to(
+myconv = MyConv2d(C, C_out, (3, 3), stride=1, padding=2, dilation=1, bias=True).to(
     device
 )
 target_conv = nn.Conv2d(
-    C, C_out, (3, 3), stride=1, padding=0, dilation=1, bias=True
+    C, C_out, (3, 3), stride=1, padding=2, dilation=1, bias=True
 ).to(device)
 
 with torch.no_grad():
