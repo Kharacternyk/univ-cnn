@@ -6,7 +6,7 @@ from torch.autograd import Function, Variable
 
 class MyConv2dFunction(Function):
     @staticmethod
-    def forward(ctx, x, weight, bias=None, stride=1, padding=0, dilation=1):
+    def forward(ctx, x, weight, bias, stride, padding, dilation):
         """
         x:       (N, C_in, H, W)
         weight:  (C_out, C_in, kH, kW)
