@@ -10,15 +10,15 @@ class MyConv2dFunction(Function):
         x:       (N, C_in, H, W)
         weight:  (C_out, C_in, kH, kW)
         bias:    (C_out,) or None
-        stride, padding, dilation: int or (h, w) tuples
+        stride, padding, dilation: int
         """
         ctx.save_for_backward(x, weight)
 
         N, C_in, H, W = x.shape
         C_out, C_in, kH, kW = weight.shape
 
-        H_out = (H + 2 * padding - dilation * (kH - 1) - 1) // stride + 1
-        W_out = (W + 2 * padding - dilation * (kW - 1) - 1) // stride + 1
+        H_out = H + 2 * padding - kH + 1
+        W_out = W + 2 * padding - kW + 1
 
         ctx.H_out = H_out
         ctx.W_out = W_out
@@ -30,7 +30,7 @@ class MyConv2dFunction(Function):
                 for k in range(H_out):
                     for l in range(W_out):
                         out[i, j, k, l] = (
-                            weight[j] * x[i, k : k + kH, l : l + kW]
+                            weight[j] * x[i, :, k : k + kH, l : l + kW]
                         ).sum()
 
                         if bias is not None:
@@ -45,8 +45,6 @@ class MyConv2dFunction(Function):
         returns gradients for (x, weight, bias, stride, padding, dilation)
         """
         # Backward implementation here
-
-        # breakpoint()
 
         H_out = ctx.H_out
         W_out = ctx.W_out
@@ -64,12 +62,12 @@ class MyConv2dFunction(Function):
             for j in range(C_out):
                 for k in range(H_out):
                     for l in range(W_out):
-                        x_grad[i, k : k + kH, l : l + kW] += (
+                        x_grad[i, :, k : k + kH, l : l + kW] += (
                             grad_output[i, j, k, l].item() * weight[j]
                         )
                         weight_grad[j] += (
                             grad_output[i, j, k, l].item()
-                            * x[i, k : k + kH, l : l + kW]
+                            * x[i, :, k : k + kH, l : l + kW]
                         )
                         bias_grad[j] += grad_output[i, j, k, l]
 
@@ -110,7 +108,7 @@ class MyConv2d(nn.Module):
 
 # Test
 device = "cuda" if torch.cuda.is_available() else "cpu"
-B, C, H, W = 2, 1, 3, 3
+B, C, H, W = 2, 1, 9, 9
 C_out = 2
 
 x = torch.randn(B, C, H, W, device=device, requires_grad=True)
