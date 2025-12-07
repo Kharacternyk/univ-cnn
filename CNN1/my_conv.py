@@ -19,12 +19,13 @@ class MyConv2dFunction(Function):
         ctx.save_for_backward(x, weight)
         ctx.padding = padding
         ctx.dilation = dilation
+        ctx.stride = stride
 
         N, C_in, H, W = x.shape
         C_out, C_in, kH, kW = weight.shape
 
-        H_out = H - kH - (kH - 1) * (dilation - 1) + 1
-        W_out = W - kW - (kW - 1) * (dilation - 1) + 1
+        H_out = (H - kH - (kH - 1) * (dilation - 1)) // stride + 1
+        W_out = (W - kW - (kW - 1) * (dilation - 1)) // stride + 1
 
         ctx.H_out = H_out
         ctx.W_out = W_out
@@ -40,8 +41,12 @@ class MyConv2dFunction(Function):
                             * x[
                                 i,
                                 :,
-                                k : k + kH + (kH - 1) * (dilation - 1) : dilation,
-                                l : l + kW + (kW - 1) * (dilation - 1) : dilation,
+                                k * stride : k * stride
+                                + kH
+                                + (kH - 1) * (dilation - 1) : dilation,
+                                l * stride : l * stride
+                                + kW
+                                + (kW - 1) * (dilation - 1) : dilation,
                             ]
                         ).sum()
 
@@ -61,6 +66,7 @@ class MyConv2dFunction(Function):
         H_out = ctx.H_out
         W_out = ctx.W_out
         dilation = ctx.dilation
+        stride = ctx.stride
 
         x, weight = ctx.saved_tensors
 
@@ -78,8 +84,12 @@ class MyConv2dFunction(Function):
                         x_grad[
                             i,
                             :,
-                            k : k + kH + (kH - 1) * (dilation - 1) : dilation,
-                            l : l + kW + (kW - 1) * (dilation - 1) : dilation,
+                            k * stride : k * stride
+                            + kH
+                            + (kH - 1) * (dilation - 1) : dilation,
+                            l * stride : l * stride
+                            + kW
+                            + (kW - 1) * (dilation - 1) : dilation,
                         ] += grad_output[i, j, k, l].item() * weight[j]
 
                         weight_grad[j] += (
@@ -87,8 +97,12 @@ class MyConv2dFunction(Function):
                             * x[
                                 i,
                                 :,
-                                k : k + kH + (kH - 1) * (dilation - 1) : dilation,
-                                l : l + kW + (kW - 1) * (dilation - 1) : dilation,
+                                k * stride : k * stride
+                                + kH
+                                + (kH - 1) * (dilation - 1) : dilation,
+                                l * stride : l * stride
+                                + kW
+                                + (kW - 1) * (dilation - 1) : dilation,
                             ]
                         )
 
@@ -133,16 +147,16 @@ class MyConv2d(nn.Module):
 
 # Test
 device = "cuda" if torch.cuda.is_available() else "cpu"
-B, C, H, W = 2, 1, 9, 12
+B, C, H, W = 2, 1, 23, 28
 C_out = 2
 
 x = torch.randn(B, C, H, W, device=device, requires_grad=True)
 
-myconv = MyConv2d(C, C_out, (3, 3), stride=1, padding=2, dilation=2, bias=True).to(
+myconv = MyConv2d(C, C_out, (3, 3), stride=4, padding=2, dilation=3, bias=True).to(
     device
 )
 target_conv = nn.Conv2d(
-    C, C_out, (3, 3), stride=1, padding=2, dilation=2, bias=True
+    C, C_out, (3, 3), stride=4, padding=2, dilation=3, bias=True
 ).to(device)
 
 with torch.no_grad():
